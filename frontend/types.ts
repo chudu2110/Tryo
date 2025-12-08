@@ -43,7 +43,20 @@ export interface UserAuthProfile {
   id: string;
   name: string;
   provider: AuthProvider;
+  providerId?: string;
   dateOfBirth?: string;
   bio?: string;
   links?: string[];
+  contactEmail?: string;
+  contactFacebookUrl?: string;
+  cvFilePath?: string;
+  portfolioFilePath?: string;
+}
+
+export interface VerifiedUser {
+  provider: AuthProvider;
+  providerId: string;
+  name: string;
+  email?: string;
+  avatarUrl?: string;
 }

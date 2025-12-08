@@ -20,42 +20,56 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess }) => 
   const [linkedinLink, setLinkedinLink] = useState('');
   const [twitterLink, setTwitterLink] = useState('');
   const [registerStep, setRegisterStep] = useState(0);
+  const [contactEmail, setContactEmail] = useState('');
+  const [facebookProfile, setFacebookProfile] = useState('');
+  const [resumeProfile, setResumeProfile] = useState<UserAuthProfile | null>(null);
+  const [regId, setRegId] = useState<string | null>(null);
+  const [cvFilePath, setCvFilePath] = useState<string | undefined>(undefined);
+  const [portfolioFilePath, setPortfolioFilePath] = useState<string | undefined>(undefined);
+  const [registerError, setRegisterError] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
   const chooseProvider = (p: AuthProvider) => {
     setProvider(p);
-    if (existing) {
-      setStep('loginConfirm');
-    } else {
-      setStep('register');
-      setRegisterStep(0);
-    }
+    setResumeProfile(null);
+    setStep('register');
+    setRegisterStep(0);
+    setRegId(crypto.randomUUID());
   };
 
   const continueLogin = () => {
-    if (!existing) return;
-    onSuccess(existing);
+    const profile = resumeProfile || existing;
+    if (!profile) return;
+    onSuccess(profile);
     onClose();
   };
 
-  const submitRegistration = (e: React.FormEvent) => {
+  const submitRegistration = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!provider) return;
     const profile: UserAuthProfile = {
-      id: crypto.randomUUID(),
+      id: regId || crypto.randomUUID(),
       name: name.trim(),
       provider,
       dateOfBirth: dob,
       bio: bio.trim(),
       links: [cvLink, portfolioLink, linkedinLink, twitterLink].map(s => s.trim()).filter(s => s.length > 0),
+      contactEmail: provider === 'google' ? contactEmail.trim() : undefined,
+      contactFacebookUrl: provider === 'facebook' ? facebookProfile.trim() : undefined,
+      cvFilePath,
+      portfolioFilePath,
     };
-    authService.saveProfile(profile);
-    onSuccess(profile);
-    onClose();
+    try {
+      const saved = await authService.saveProfile(profile);
+      onSuccess(saved);
+      onClose();
+    } catch (err: any) {
+      setRegisterError(err?.message || 'Registration failed');
+    }
   };
 
-  const questions = [
+  const baseQuestions = [
     {
       key: 'name',
       label: 'Display name',
@@ -114,6 +128,14 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess }) => 
     },
   ];
 
+  const firstQuestion = provider === 'google'
+    ? { key: 'contactEmail', label: 'Your Gmail', type: 'text' as const, value: contactEmail, onChange: setContactEmail, placeholder: 'your.email@gmail.com', required: true }
+    : provider === 'facebook'
+      ? { key: 'facebookProfile', label: 'Your Facebook profile link', type: 'text' as const, value: facebookProfile, onChange: setFacebookProfile, placeholder: 'https://facebook.com/your.profile', required: true }
+      : null;
+
+  const questions = firstQuestion ? [firstQuestion, ...baseQuestions] : baseQuestions;
+
   const canContinue = () => {
     const q = questions[registerStep];
     if (!q) return false;
@@ -123,12 +145,24 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess }) => 
     return true;
   };
 
-  const goNext = () => {
+  const goNext = async () => {
+    if (registerStep === 0 && firstQuestion) {
+      const identifier = firstQuestion.key === 'contactEmail' ? contactEmail.trim() : facebookProfile.trim();
+      if (identifier.length > 0 && provider) {
+        const found = await authService.findProfile(provider, identifier);
+        if (found) {
+          setName(found.name || '');
+          setResumeProfile(found);
+          setStep('loginConfirm');
+          return;
+        }
+      }
+    }
     if (registerStep < questions.length - 1) {
       setRegisterStep(registerStep + 1);
     } else {
       const fakeEvent = { preventDefault: () => {} } as unknown as React.FormEvent;
-      submitRegistration(fakeEvent);
+      await submitRegistration(fakeEvent);
     }
   };
 
@@ -165,9 +199,9 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess }) => 
             </div>
           </div>
         )}
-        {step === 'loginConfirm' && existing && (
+        {step === 'loginConfirm' && (
           <div className="p-6 space-y-6">
-            <p className="text-neutral-300">You previously signed in to Tryo. Continue as "{existing.name}"?</p>
+            <p className="text-neutral-300">You previously signed in to Tryo. Continue as "{name}"?</p>
             <div className="flex gap-3">
               <button onClick={continueLogin} className="px-5 py-2 rounded-xl bg-lime-accent text-black font-bold">Continue</button>
               <button onClick={() => setStep('provider')} className="px-5 py-2 rounded-xl bg-white/10 text-white">Cancel</button>
@@ -206,6 +240,41 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess }) => 
                   className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-neutral-700"
                   placeholder={questions[registerStep].placeholder}
                 />
+              )}
+              {questions[registerStep].key === 'cv' && (
+                <div className="pt-2">
+                  <label className="text-xs text-neutral-500">Upload CV file</label>
+                  <input type="file" onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (file && regId) {
+                      const path = await authService.uploadFile(regId, file);
+                      setCvFilePath(path);
+                    }
+                  }} className="mt-1 text-neutral-300" />
+                  {cvFilePath && <p className="text-xs text-neutral-400 mt-1">Uploaded: {cvFilePath}</p>}
+                </div>
+              )}
+              {questions[registerStep].key === 'portfolio' && (
+                <div className="pt-2">
+                  <label className="text-xs text-neutral-500">Upload portfolio file</label>
+                  <input type="file" onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (file && regId) {
+                      const path = await authService.uploadFile(regId, file);
+                      setPortfolioFilePath(path);
+                    }
+                  }} className="mt-1 text-neutral-300" />
+                  {portfolioFilePath && <p className="text-xs text-neutral-400 mt-1">Uploaded: {portfolioFilePath}</p>}
+                </div>
+              )}
+              {questions[registerStep].key === 'contactEmail' && (
+                <p className="text-xs text-neutral-500">We’ll use this email for important updates.</p>
+              )}
+              {questions[registerStep].key === 'facebookProfile' && (
+                <p className="text-xs text-neutral-500">Paste your profile link we can notify via Facebook.</p>
+              )}
+              {registerError && (
+                <p className="text-xs text-red-400">{registerError}</p>
               )}
             </div>
             <div className="flex items-center justify-between">
