@@ -36,3 +36,14 @@ export interface UserProfile {
   name: string;
   avatarUrl?: string;
 }
+
+export type AuthProvider = 'google' | 'facebook';
+
+export interface UserAuthProfile {
+  id: string;
+  name: string;
+  provider: AuthProvider;
+  dateOfBirth?: string;
+  bio?: string;
+  links?: string[];
+}

@@ -1,22 +1,31 @@
 import React, { useState, useEffect } from 'react';
-import { ProjectPost } from './types';
+import { ProjectPost, UserAuthProfile } from './types';
 import * as storageService from './services/storageService';
+import * as authService from './services/authService';
 import ProjectCard from './components/ProjectCard';
 import CreatePostModal from './components/CreatePostModal';
+import AuthModal from './components/AuthModal';
 
 const App: React.FC = () => {
   const [posts, setPosts] = useState<ProjectPost[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentUser, setCurrentUser] = useState<string>('');
-  const [isProfileEditing, setIsProfileEditing] = useState(false);
+  const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [newName, setNewName] = useState('');
 
   useEffect(() => {
     const loadedPosts = storageService.getPosts();
     setPosts(loadedPosts.sort((a, b) => new Date(b.postedDate).getTime() - new Date(a.postedDate).getTime()));
-    const user = storageService.getUser();
-    setCurrentUser(user);
-    setNewName(user);
+    const auth = authService.getProfile();
+    if (auth?.name) {
+      setCurrentUser(auth.name);
+      setNewName(auth.name);
+      storageService.saveUser(auth.name);
+    } else {
+      const user = storageService.getUser();
+      setCurrentUser(user);
+      setNewName(user);
+    }
   }, []);
 
   const handleCreatePost = (postData: any) => {
@@ -24,10 +33,10 @@ const App: React.FC = () => {
     setPosts(prev => [newPost, ...prev]);
   };
 
-  const saveProfile = () => {
-    storageService.saveUser(newName);
-    setCurrentUser(newName);
-    setIsProfileEditing(false);
+  const handleAuthSuccess = (profile: UserAuthProfile) => {
+    storageService.saveUser(profile.name);
+    setCurrentUser(profile.name);
+    setNewName(profile.name);
   };
 
   return (
@@ -51,27 +60,13 @@ const App: React.FC = () => {
             <span className="text-2xl font-bold tracking-tight text-white">Tryo</span>
           </div>
           <div className="flex items-center gap-4">
-             {isProfileEditing ? (
-               <div className="flex items-center gap-2 bg-white/5 p-1 pr-2 rounded-full border border-white/10">
-                 <input 
-                  value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
-                  className="bg-transparent text-white px-3 py-1 focus:outline-none text-sm font-medium w-32"
-                  autoFocus
-                 />
-                 <button onClick={saveProfile} className="text-lime-accent hover:text-white">
-                   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                 </button>
-               </div>
-             ) : (
-                <div 
-                  onClick={() => setIsProfileEditing(true)}
-                  className="flex items-center gap-2 cursor-pointer hover:bg-white/5 px-3 py-1.5 rounded-full transition-colors group"
-                >
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-lime-400 to-blue-500 border-2 border-black group-hover:border-lime-accent/50 transition-colors"></div>
-                  <span className="text-sm font-medium text-neutral-300 group-hover:text-white hidden sm:block">{currentUser}</span>
-                </div>
-             )}
+            <div 
+              onClick={() => setIsAuthOpen(true)}
+              className="flex items-center gap-2 cursor-pointer hover:bg-white/5 px-3 py-1.5 rounded-full transition-colors group"
+            >
+              <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-lime-400 to-blue-500 border-2 border-black group-hover:border-lime-accent/50 transition-colors"></div>
+              <span className="text-sm font-medium text-neutral-300 group-hover:text-white hidden sm:block">{currentUser}</span>
+            </div>
           </div>
         </div>
       </header>
@@ -130,6 +125,11 @@ const App: React.FC = () => {
         onClose={() => setIsModalOpen(false)}
         onSubmit={handleCreatePost}
         currentUser={currentUser}
+      />
+      <AuthModal 
+        isOpen={isAuthOpen}
+        onClose={() => setIsAuthOpen(false)}
+        onSuccess={handleAuthSuccess}
       />
     </div>
   );
