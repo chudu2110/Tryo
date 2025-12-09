@@ -22,3 +22,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Trae workspace files
+.trae/
+
+# Local uploads (do not commit user files)
+backend/uploads/

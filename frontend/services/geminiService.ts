@@ -1,9 +1,15 @@
 import { GoogleGenAI } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+const getAI = () => {
+  const key = process.env.API_KEY as string | undefined;
+  if (!key) return null;
+  return new GoogleGenAI({ apiKey: key });
+};
 
 export const enhanceDescription = async (currentDescription: string): Promise<string> => {
   try {
+    const ai = getAI();
+    if (!ai) return currentDescription;
     const model = 'gemini-2.5-flash';
     const prompt = `
       You are an expert startup copywriter. 
@@ -23,7 +29,6 @@ export const enhanceDescription = async (currentDescription: string): Promise<st
 
     return response.text?.trim() || currentDescription;
   } catch (error) {
-    console.error("Failed to enhance description:", error);
     return currentDescription;
   }
 };

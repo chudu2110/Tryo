@@ -55,13 +55,14 @@ const CreatePostModal: React.FC<CreatePostModalProps> = ({ isOpen, onClose, onSu
     let imageUrl: string | null = imagePreview;
     try {
       if (imageFile && currentUserId) {
-        const uploaded = await authService.uploadFile(currentUserId, imageFile);
+        const uploaded = await authService.uploadFile(currentUserId, imageFile, 'post_cover');
         imageUrl = uploaded || imagePreview;
       }
     } catch {}
 
     const postData = {
       founderName: currentUser,
+      founderId: currentUserId,
       projectName,
       field,
       stage,
@@ -226,9 +227,17 @@ const CreatePostModal: React.FC<CreatePostModalProps> = ({ isOpen, onClose, onSu
               <button 
                 type="submit"
                 disabled={loading}
-                className="w-full bg-lime-accent hover:bg-lime-400 text-black font-bold text-lg py-4 rounded-2xl transition-all transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_20px_rgba(195,245,60,0.3)] hover:shadow-[0_0_30px_rgba(195,245,60,0.5)]"
+                aria-busy={loading}
+                className="w-full bg-lime-accent hover:bg-lime-400 text-black font-bold text-lg py-4 rounded-2xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_20px_rgba(195,245,60,0.3)] hover:shadow-[0_0_30px_rgba(195,245,60,0.5)]"
               >
-                {loading ? 'Launching...' : 'Post Opportunity'}
+                {loading ? (
+                  <span className="inline-flex items-center justify-center gap-2">
+                    <span>Launching</span>
+                    <span className="inline-block w-5 text-left animate-pulse">...</span>
+                  </span>
+                ) : (
+                  'Post Opportunity'
+                )}
               </button>
             </div>
           </form>

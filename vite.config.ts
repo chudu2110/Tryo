@@ -1,6 +1,6 @@
 import path from 'path';
 import fs from 'fs';
-import { ensureUserStore, findUser, upsertUser, deleteUser, isBlacklisted } from './backend/userStore';
+import { ensureUserStore, findUser, findUserByName, upsertUser, deleteUser, isBlacklisted } from './backend/userStore';
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 
@@ -79,6 +79,31 @@ export default defineConfig(({ mode }) => {
               res.end(JSON.stringify({ found: !!found, profile: found }));
             });
 
+            server.middlewares.use('/api/users/publicByName', async (req, res, next) => {
+              if (req.method !== 'POST') return next();
+              res.setHeader('Content-Type', 'application/json');
+              const body = await readJsonBody(req);
+              const name = (body?.name || '').trim();
+              if (!name) { res.statusCode = 400; res.end(JSON.stringify({ error: 'missing_name' })); return; }
+              const found = findUserByName(name);
+              if (!found) { res.end(JSON.stringify({ found: false })); return; }
+              const publicProfile = {
+                id: found.id,
+                name: found.name,
+                provider: found.provider,
+                providerId: found.providerId,
+                dateOfBirth: found.dateOfBirth,
+                bio: found.bio,
+                links: found.links,
+                contactEmail: found.contactEmail,
+                contactFacebookUrl: found.contactFacebookUrl,
+                phoneNumber: found.phoneNumber,
+                cvFilePath: found.cvFilePath,
+                portfolioFilePath: found.portfolioFilePath,
+              };
+              res.end(JSON.stringify({ found: true, profile: publicProfile }));
+            });
+
             server.middlewares.use('/api/users/upsert', async (req, res, next) => {
               if (req.method !== 'POST') return next();
               res.setHeader('Content-Type', 'application/json');
@@ -143,6 +168,12 @@ export default defineConfig(({ mode }) => {
                     : lower.endsWith('.jpg') || lower.endsWith('.jpeg') ? 'image/jpeg'
                     : lower.endsWith('.webp') ? 'image/webp'
                     : lower.endsWith('.gif') ? 'image/gif'
+                    : lower.endsWith('.svg') ? 'image/svg+xml'
+                    : lower.endsWith('.bmp') ? 'image/bmp'
+                    : lower.endsWith('.tif') || lower.endsWith('.tiff') ? 'image/tiff'
+                    : lower.endsWith('.ico') ? 'image/x-icon'
+                    : lower.endsWith('.avif') ? 'image/avif'
+                    : lower.endsWith('.heic') ? 'image/heic'
                     : 'application/octet-stream';
                   res.setHeader('Content-Type', type);
                   res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
@@ -161,7 +192,9 @@ export default defineConfig(({ mode }) => {
         'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
         'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
         'process.env.GOOGLE_CLIENT_ID': JSON.stringify(env.GOOGLE_CLIENT_ID),
-        'process.env.FACEBOOK_APP_ID': JSON.stringify(env.FACEBOOK_APP_ID)
+        'process.env.FACEBOOK_APP_ID': JSON.stringify(env.FACEBOOK_APP_ID),
+        'process.env.SUPABASE_URL': JSON.stringify(env.SUPABASE_URL || env.VITE_SUPABASE_URL),
+        'process.env.SUPABASE_KEY': JSON.stringify(env.SUPABASE_KEY || env.VITE_SUPABASE_ANON_KEY)
       },
       resolve: {
         alias: {

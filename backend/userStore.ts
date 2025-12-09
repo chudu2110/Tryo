@@ -8,9 +8,10 @@ export interface UserRecord {
   providerId: string; // gmail or facebook profile link
   dateOfBirth?: string;
   bio?: string;
-  links?: string[];
+  links?: (string | { title?: string; url: string })[];
   contactEmail?: string;
   contactFacebookUrl?: string;
+  phoneNumber?: string;
   cvFilePath?: string;
   portfolioFilePath?: string;
 }
@@ -70,6 +71,13 @@ export function addToBlacklist(identifier: string) {
 export function findUser(provider: 'google'|'facebook', identifier: string): UserRecord | null {
   const users = readUsers();
   const found = users.find(u => u.provider === provider && u.providerId === identifier);
+  return found || null;
+}
+
+export function findUserByName(name: string): UserRecord | null {
+  const users = readUsers();
+  const key = (name || '').trim().toLowerCase();
+  const found = users.find(u => (u.name || '').trim().toLowerCase() === key);
   return found || null;
 }
 

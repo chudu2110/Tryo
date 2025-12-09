@@ -41,7 +41,10 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, profile, o
 
   if (!isOpen) return null;
 
+  const [saving, setSaving] = useState(false);
+
   const save = async () => {
+    setSaving(true);
     const updated: UserAuthProfile = {
       ...profile,
       name: name.trim(),
@@ -53,9 +56,13 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, profile, o
       cvFilePath,
       portfolioFilePath,
     };
-    const saved = await authService.saveProfile(updated);
-    onSaved(saved);
-    onClose();
+    try {
+      const saved = await authService.saveProfile(updated);
+      onSaved(saved);
+      onClose();
+    } finally {
+      setSaving(false);
+    }
   };
 
   const setLink = (index: number, value: string) => {
@@ -115,7 +122,7 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, profile, o
                 <input type="file" onChange={async (e) => {
                   const f = e.target.files?.[0];
                   if (f) {
-                    const path = await authService.uploadFile(profile.id, f);
+                    const path = await authService.uploadFile(profile.id, f, 'cv');
                     setCvFilePath(path);
                   }
                 }} className="mt-1 text-neutral-300" />
@@ -130,7 +137,7 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, profile, o
                 <input type="file" onChange={async (e) => {
                   const f = e.target.files?.[0];
                   if (f) {
-                    const path = await authService.uploadFile(profile.id, f);
+                    const path = await authService.uploadFile(profile.id, f, 'portfolio');
                     setPortfolioFilePath(path);
                   }
                 }} className="mt-1 text-neutral-300" />
@@ -155,7 +162,14 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, profile, o
 
           <div className="flex justify-end gap-3">
             <button onClick={onClose} className="px-5 py-2 rounded-xl bg-white/10 text-white">Cancel</button>
-            <button onClick={save} className="px-5 py-2 rounded-xl bg-lime-accent text-black font-bold">Save</button>
+            <button onClick={save} disabled={saving} aria-busy={saving} className="px-5 py-2 rounded-xl bg-lime-accent text-black font-bold disabled:opacity-50 disabled:cursor-not-allowed">
+              {saving ? (
+                <span className="inline-flex items-center gap-2">
+                  <span>Saving</span>
+                  <span className="inline-block w-5 text-left animate-pulse">...</span>
+                </span>
+              ) : 'Save'}
+            </button>
           </div>
         </div>
       </div>

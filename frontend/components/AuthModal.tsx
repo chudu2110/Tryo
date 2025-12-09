@@ -247,7 +247,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess }) => 
                   <input type="file" onChange={async (e) => {
                     const file = e.target.files?.[0];
                     if (file && regId) {
-                      const path = await authService.uploadFile(regId, file);
+                      const path = await authService.uploadFile(regId, file, 'cv');
                       setCvFilePath(path);
                     }
                   }} className="mt-1 text-neutral-300" />
@@ -260,7 +260,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess }) => 
                   <input type="file" onChange={async (e) => {
                     const file = e.target.files?.[0];
                     if (file && regId) {
-                      const path = await authService.uploadFile(regId, file);
+                      const path = await authService.uploadFile(regId, file, 'portfolio');
                       setPortfolioFilePath(path);
                     }
                   }} className="mt-1 text-neutral-300" />

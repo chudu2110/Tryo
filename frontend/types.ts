@@ -46,9 +46,10 @@ export interface UserAuthProfile {
   providerId?: string;
   dateOfBirth?: string;
   bio?: string;
-  links?: string[];
+  links?: (string | { title?: string; url: string })[];
   contactEmail?: string;
   contactFacebookUrl?: string;
+  phoneNumber?: string;
   cvFilePath?: string;
   portfolioFilePath?: string;
 }

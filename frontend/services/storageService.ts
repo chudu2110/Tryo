@@ -1,7 +1,99 @@
 import { ProjectPost, ProjectField, ProjectStage } from '../types';
+import { supabase } from './supabaseClient';
 
 const STORAGE_KEY_POSTS = 'launchpad_posts';
 const STORAGE_KEY_USER = 'launchpad_user';
+const STORAGE_KEY_POST_VIEWS = 'launchpad_post_profile_views';
+
+let postsCache: ProjectPost[] = [];
+let viewsCache: Record<string, number> = {};
+
+type DbPost = {
+  id: string;
+  founder_name: string;
+  project_name: string;
+  posted_date: string;
+  deadline: string;
+  description: string;
+  image_url: string;
+  field: string;
+  stage: string;
+  compensation: string;
+  roles: string[] | null;
+};
+
+const mapRowToPost = (r: DbPost): ProjectPost => ({
+  id: r.id,
+  founderName: r.founder_name,
+  projectName: r.project_name,
+  postedDate: new Date(r.posted_date).toISOString(),
+  deadline: new Date(r.deadline).toISOString(),
+  description: r.description,
+  imageUrl: r.image_url,
+  field: r.field as ProjectField,
+  stage: r.stage as ProjectStage,
+  compensation: r.compensation,
+  roles: Array.isArray(r.roles) ? r.roles : []
+});
+
+const init = async (): Promise<void> => {
+  const rp = await supabase.from('posts').select('*');
+  if (rp.data) {
+    postsCache = rp.data.map(mapRowToPost);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('posts:changed'));
+    }
+  } else {
+    postsCache = SEED_DATA;
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('posts:changed'));
+    }
+  }
+  const rv = await supabase.from('post_profile_views').select('*');
+  if (rv.data) {
+    viewsCache = {};
+    rv.data.forEach((row: any) => { viewsCache[row.post_id] = row.view_count as number; });
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('posts:viewsChanged'));
+    }
+  } else {
+    viewsCache = {};
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('posts:viewsChanged'));
+    }
+  }
+  const ch = supabase.channel('realtime-stream');
+  ch.on('postgres_changes', { event: '*', schema: 'public', table: 'posts' }, (payload: any) => {
+    const n = payload.new as DbPost | null;
+    const o = payload.old as DbPost | null;
+    if (payload.eventType === 'INSERT' && n) {
+      const p = mapRowToPost(n);
+      postsCache = [p, ...postsCache.filter(x => x.id !== p.id)];
+    } else if (payload.eventType === 'UPDATE' && n) {
+      postsCache = postsCache.map(x => (x.id === n.id ? mapRowToPost(n) : x));
+    } else if (payload.eventType === 'DELETE' && o) {
+      postsCache = postsCache.filter(x => x.id !== o.id);
+    }
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('posts:changed'));
+    }
+  });
+  ch.on('postgres_changes', { event: '*', schema: 'public', table: 'post_profile_views' }, (payload: any) => {
+    const n = payload.new as any;
+    const o = payload.old as any;
+    if ((payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') && n) {
+      viewsCache[n.post_id] = n.view_count as number;
+    } else if (payload.eventType === 'DELETE' && o) {
+      delete viewsCache[o.post_id];
+    }
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('posts:viewsChanged'));
+    }
+  });
+  await ch.subscribe();
+};
+
+void init();
 
 const SEED_DATA: ProjectPost[] = [
   {
@@ -33,64 +125,72 @@ const SEED_DATA: ProjectPost[] = [
 ];
 
 export const getPosts = (): ProjectPost[] => {
-  const stored = localStorage.getItem(STORAGE_KEY_POSTS);
-  if (!stored) {
-    localStorage.setItem(STORAGE_KEY_POSTS, JSON.stringify(SEED_DATA));
-    return SEED_DATA;
-  }
-  return JSON.parse(stored);
+  return postsCache;
 };
 
-export const createPost = (post: Omit<ProjectPost, 'id' | 'postedDate'>): ProjectPost => {
-  const posts = getPosts();
+export const createPost = (post: Omit<ProjectPost, 'id' | 'postedDate'> & { founderId?: string }): ProjectPost => {
   const newPost: ProjectPost = {
     ...post,
     id: crypto.randomUUID(),
     postedDate: new Date().toISOString()
   };
-  const updatedPosts = [newPost, ...posts];
-  localStorage.setItem(STORAGE_KEY_POSTS, JSON.stringify(updatedPosts));
-  if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent('posts:changed'));
-  }
+  const row = {
+    id: newPost.id,
+    founder_name: newPost.founderName,
+    founder_id: post.founderId || null,
+    project_name: newPost.projectName,
+    posted_date: newPost.postedDate,
+    deadline: newPost.deadline,
+    description: newPost.description,
+    image_url: newPost.imageUrl,
+    field: newPost.field,
+    stage: newPost.stage,
+    compensation: newPost.compensation,
+    roles: newPost.roles
+  };
+  void supabase.from('posts').insert(row).then((res) => {
+    postsCache = [newPost, ...postsCache.filter(x => x.id !== newPost.id)];
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('posts:changed'));
+    }
+  });
   return newPost;
 };
 
 export const updatePost = (updated: ProjectPost): ProjectPost => {
-  const posts = getPosts();
-  const idx = posts.findIndex(p => p.id === updated.id);
-  if (idx >= 0) {
-    posts[idx] = { ...posts[idx], ...updated };
-    localStorage.setItem(STORAGE_KEY_POSTS, JSON.stringify(posts));
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('posts:changed'));
-    }
-    return posts[idx];
-  }
-  return createPost({
-    founderName: updated.founderName,
-    projectName: updated.projectName,
+  const row = {
+    founder_name: updated.founderName,
+    project_name: updated.projectName,
+    posted_date: updated.postedDate,
+    deadline: updated.deadline,
+    description: updated.description,
+    image_url: updated.imageUrl,
     field: updated.field,
     stage: updated.stage,
     compensation: updated.compensation,
-    deadline: updated.deadline,
-    description: updated.description,
-    imageUrl: updated.imageUrl,
-    roles: updated.roles,
+    roles: updated.roles
+  };
+  void supabase.from('posts').update(row).eq('id', updated.id).then((res) => {
+    postsCache = postsCache.map(x => (x.id === updated.id ? updated : x));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('posts:changed'));
+    }
   });
+  return updated;
 };
 
 export const deletePost = (id: string): void => {
-  const posts = getPosts();
-  const next = posts.filter(p => p.id !== id);
-  localStorage.setItem(STORAGE_KEY_POSTS, JSON.stringify(next));
-  if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent('posts:changed'));
-  }
+  void supabase.from('posts').delete().eq('id', id).then((res) => {
+    postsCache = postsCache.filter(x => x.id !== id);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('posts:changed'));
+    }
+  });
 };
 
 export const getPostsByFounder = (name: string): ProjectPost[] => {
-  return getPosts().filter(p => p.founderName === name);
+  const key = (name || '').trim().toLowerCase();
+  return getPosts().filter(p => (p.founderName || '').trim().toLowerCase() === key);
 };
 
 export const getUser = (): string => {
@@ -104,4 +204,31 @@ export const getUser = (): string => {
 
 export const saveUser = (name: string): void => {
   localStorage.setItem(STORAGE_KEY_USER, name);
+};
+
+export const getProfileViewMap = (): Record<string, number> => {
+  return { ...viewsCache };
+};
+
+export const incrementProfileViews = (postId: string): void => {
+  const doInc = async () => {
+    const cur = await supabase.from('post_profile_views').select('view_count').eq('post_id', postId).single();
+    const next = (cur.data?.view_count as number | undefined) ?? (viewsCache[postId] ?? 0);
+    const up = await supabase.from('post_profile_views').upsert({ post_id: postId, view_count: next + 1 }, { onConflict: 'post_id' });
+    if (up.error) {
+      viewsCache[postId] = next + 1;
+    } else {
+      viewsCache[postId] = next + 1;
+    }
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('posts:viewsChanged'));
+    }
+  };
+  void doInc();
+};
+
+export const getTopTrendingPostIds = (limit: number = 30): string[] => {
+  const entries = Object.entries(viewsCache);
+  entries.sort((a, b) => b[1] - a[1]);
+  return entries.slice(0, limit).map(e => e[0]);
 };

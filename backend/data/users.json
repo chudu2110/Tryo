@@ -5,11 +5,18 @@
     "provider": "google",
     "dateOfBirth": "2005-08-17",
     "bio": "Software Enthusiast",
-    "links": [],
+    "links": [
+      "https://www.linkedin.com/in/chu-du-5698b128a/",
+      {
+        "title": "Github",
+        "url": "https://github.com/chudu2110"
+      }
+    ],
     "contactEmail": "dudzquadu@gmail.com",
     "providerId": "dudzquadu@gmail.com",
     "cvFilePath": "backend\\uploads\\5b8b6bce-3710-4380-be52-49b1097ef443\\MY CV.pdf",
-    "portfolioFilePath": "backend\\uploads\\5b8b6bce-3710-4380-be52-49b1097ef443\\573077517_1607728450636537_8692343084556184359_n.jpg"
+    "portfolioFilePath": "backend\\uploads\\5b8b6bce-3710-4380-be52-49b1097ef443\\573077517_1607728450636537_8692343084556184359_n.jpg",
+    "phoneNumber": "0339158826"
   },
   {
     "id": "a5800cb4-080c-47fd-8c55-3e65b8a169e5",

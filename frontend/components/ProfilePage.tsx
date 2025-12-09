@@ -19,6 +19,8 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ profile, onSaved, onDeleted }
   const [portfolioLink, setPortfolioLink] = useState('');
   const [linkedinUrl, setLinkedinUrl] = useState('');
   const [twitterUrl, setTwitterUrl] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState(profile.phoneNumber || '');
+  const [customLinks, setCustomLinks] = useState<{ title: string; url: string }[]>([]);
   const [cvFilePath, setCvFilePath] = useState<string | undefined>(profile.cvFilePath);
   const [portfolioFilePath, setPortfolioFilePath] = useState<string | undefined>(profile.portfolioFilePath);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -35,14 +37,23 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ profile, onSaved, onDeleted }
     setBio(profile.bio || '');
     setContactEmail(profile.contactEmail || '');
     setContactFacebookUrl(profile.contactFacebookUrl || '');
-    const guess = (needle: string, fallback: string = '') => (profile.links || []).find(l => l.toLowerCase().includes(needle)) || fallback;
+    const guess = (needle: string, fallback: string = '') => {
+      const arr = profile.links || [];
+      const found = arr.find(l => typeof l === 'string' && l.toLowerCase().includes(needle));
+      return (found as string) || fallback;
+    };
     setCvLink(guess('cv'));
     setPortfolioLink(guess('portfolio'));
     setLinkedinUrl(guess('linkedin'));
     setTwitterUrl(guess('twitter'));
     setCvFilePath(profile.cvFilePath);
     setPortfolioFilePath(profile.portfolioFilePath);
+    const structured = (profile.links || []).filter(l => typeof l === 'object' && (l as any)?.url);
+    setCustomLinks(structured.map(l => ({ title: (l as any).title || '', url: (l as any).url || '' })));
+    setPhoneNumber(profile.phoneNumber || '');
   }, [profile]);
+
+  
 
   useEffect(() => {
     setMyPosts(storageService.getPostsByFounder(profile.name));
@@ -52,14 +63,23 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ profile, onSaved, onDeleted }
     setSaveLoading(true);
     setSaveError(null);
     try {
+      const mergedLinks: (string | { title?: string; url: string })[] = [cvLink, portfolioLink, linkedinUrl, twitterUrl]
+        .map(l => l.trim())
+        .filter(Boolean);
       const updated: UserAuthProfile = {
         ...profile,
         name: name.trim(),
         dateOfBirth: dob,
         bio: bio.trim(),
-        links: [cvLink, portfolioLink, linkedinUrl, twitterUrl].map(l => l.trim()).filter(Boolean),
+        links: [
+          ...mergedLinks,
+          ...customLinks
+            .filter(l => l.url.trim().length > 0)
+            .map(l => ({ title: l.title.trim(), url: l.url.trim() }))
+        ],
         contactEmail: profile.provider === 'google' ? contactEmail.trim() : undefined,
         contactFacebookUrl: profile.provider === 'facebook' ? contactFacebookUrl.trim() : undefined,
+        phoneNumber: phoneNumber.trim(),
         cvFilePath,
         portfolioFilePath,
       };
@@ -98,8 +118,11 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ profile, onSaved, onDeleted }
     });
   };
 
+  const [savingEdit, setSavingEdit] = useState(false);
+
   const saveEdit = () => {
     if (!editingPost) return;
+    setSavingEdit(true);
     const updated: ProjectPost = {
       ...editingPost,
       projectName: editForm.projectName,
@@ -113,6 +136,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ profile, onSaved, onDeleted }
     };
     storageService.updatePost(updated);
     setMyPosts(storageService.getPostsByFounder(profile.name));
+    setSavingEdit(false);
     setEditingPost(null);
   };
 
@@ -128,7 +152,16 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ profile, onSaved, onDeleted }
           <h1 className="text-lg font-bold text-white">Your Profile</h1>
           <div className="flex items-center gap-3">
             <button onClick={() => { location.hash = ''; }} className="px-4 py-2 rounded-full bg-white/10 text-white">Back to Home</button>
-            <button onClick={save} disabled={saveLoading} className="px-4 py-2 rounded-full bg-lime-accent text-black font-bold disabled:opacity-50">{saveLoading ? 'Saving...' : 'Save'}</button>
+            <button onClick={save} disabled={saveLoading} className="px-4 py-2 rounded-full bg-lime-accent text-black font-bold disabled:opacity-50">
+              {saveLoading ? (
+                <span className="flex items-center gap-2">
+                  <span>Saving</span>
+                  <span className="inline-block w-5 text-left animate-pulse">...</span>
+                </span>
+              ) : (
+                'Save'
+              )}
+            </button>
           </div>
         </div>
       </header>
@@ -174,6 +207,11 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ profile, onSaved, onDeleted }
           </section>
         )}
 
+        <section className="space-y-2">
+          <label className="text-xs font-semibold text-neutral-400 uppercase">Phone number</label>
+          <input value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white" placeholder="Your phone number" />
+        </section>
+
         <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="space-y-3">
             <h3 className="text-sm font-semibold text-white">CV</h3>
@@ -183,7 +221,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ profile, onSaved, onDeleted }
               <input type="file" onChange={async (e) => {
                 const f = e.target.files?.[0];
                 if (f) {
-                  const path = await authService.uploadFile(profile.id, f);
+                  const path = await authService.uploadFile(profile.id, f, 'cv');
                   setCvFilePath(path);
                   try {
                     const saved = await authService.saveProfile({
@@ -210,7 +248,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ profile, onSaved, onDeleted }
               <input type="file" onChange={async (e) => {
                 const f = e.target.files?.[0];
                 if (f) {
-                  const path = await authService.uploadFile(profile.id, f);
+                  const path = await authService.uploadFile(profile.id, f, 'portfolio');
                   setPortfolioFilePath(path);
                   try {
                     const saved = await authService.saveProfile({
@@ -242,6 +280,35 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ profile, onSaved, onDeleted }
               <label className="text-xs font-semibold text-neutral-400 uppercase">Twitter/X</label>
               <input value={twitterUrl} onChange={(e) => setTwitterUrl(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white" placeholder="Twitter/X URL" />
             </div>
+          </div>
+        </section>
+
+        <section className="space-y-2">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-white">Links</h3>
+            <button onClick={() => setCustomLinks([...customLinks, { title: '', url: '' }])} className="px-3 py-1 rounded-full bg-white/10 text-white">+</button>
+          </div>
+          <div className="space-y-2">
+            {customLinks.map((l, i) => (
+              <div key={i} className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                <input value={l.title} onChange={(e) => {
+                  const next = [...customLinks];
+                  next[i] = { ...next[i], title: e.target.value };
+                  setCustomLinks(next);
+                }} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white" placeholder="Title" />
+                <input value={l.url} onChange={(e) => {
+                  const next = [...customLinks];
+                  next[i] = { ...next[i], url: e.target.value };
+                  setCustomLinks(next);
+                }} className="w-full md:col-span-2 bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white" placeholder="https://..." />
+                <div className="md:col-span-3 flex justify-end">
+                  <button onClick={() => setCustomLinks(customLinks.filter((_, idx) => idx !== i))} className="px-3 py-1 rounded-full bg-white/10 text-white">Remove</button>
+                </div>
+              </div>
+            ))}
+            {customLinks.length === 0 && (
+              <p className="text-xs text-neutral-500">Add custom links with titles using the + button.</p>
+            )}
           </div>
         </section>
 
@@ -364,7 +431,14 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ profile, onSaved, onDeleted }
                         </div>
                         <div className="flex justify-end gap-3">
                           <button onClick={() => setEditingPost(null)} className="px-5 py-2 rounded-xl bg-white/10 text-white">Cancel</button>
-                          <button onClick={saveEdit} className="px-5 py-2 rounded-xl bg-lime-accent text-black font-bold">Save</button>
+                          <button onClick={saveEdit} disabled={savingEdit} aria-busy={savingEdit} className="px-5 py-2 rounded-xl bg-lime-accent text-black font-bold disabled:opacity-50 disabled:cursor-not-allowed">
+                            {savingEdit ? (
+                              <span className="inline-flex items-center gap-2">
+                                <span>Saving</span>
+                                <span className="inline-block w-5 text-left animate-pulse">...</span>
+                              </span>
+                            ) : 'Save'}
+                          </button>
                         </div>
                       </div>
                     </div>
