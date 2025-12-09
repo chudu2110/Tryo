@@ -122,21 +122,11 @@ export const setSavedProfileByName = (name: string, profile: UserAuthProfile): v
 };
 
 export const uploadFile = async (userId: string, file: File, assetType?: 'post_cover'|'cv'|'portfolio'|'avatar'): Promise<string> => {
-  const base64 = await new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result as string;
-      const encoded = result.split(',')[1] || '';
-      resolve(encoded);
-    };
-    reader.onerror = () => reject(new Error('file_read_error'));
-    reader.readAsDataURL(file);
-  });
-  const r = await fetch('/api/upload', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId, filename: file.name, contentBase64: base64 }) });
-  if (!r.ok) throw new Error('upload_failed');
-  const j = await r.json();
-  const raw = (j?.url || j?.path) as string;
-  if (!raw) return raw;
+  const path = `${userId}/${file.name}`;
+  const up = await supabase.storage.from('uploads').upload(path, file, { upsert: true });
+  if (up.error) throw new Error('upload_failed');
+  const pub = supabase.storage.from('uploads').getPublicUrl(path);
+  const raw = (pub?.data?.publicUrl as string) || '';
   const hasQuery = raw.includes('?');
   const sep = hasQuery ? '&' : '?';
   const url = `${raw}${sep}v=${Date.now()}`;
@@ -147,7 +137,7 @@ export const uploadFile = async (userId: string, file: File, assetType?: 'post_c
 };
 
 export const deleteAccount = async (provider: 'google'|'facebook', identifier: string): Promise<void> => {
-  const r = await fetch('/api/users/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ provider, identifier }) });
-  if (!r.ok) throw new Error('delete_failed');
+  const del = await supabase.from('users').delete().eq('provider', provider).eq('provider_id', identifier);
+  if (del.error) throw new Error('delete_failed');
   clearProfile();
 };
