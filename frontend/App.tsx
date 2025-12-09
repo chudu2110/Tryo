@@ -40,9 +40,42 @@ const App: React.FC = () => {
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
 
+  useEffect(() => {
+    const onPostsChanged = () => {
+      const loaded = storageService.getPosts();
+      setPosts(loaded.sort((a, b) => new Date(b.postedDate).getTime() - new Date(a.postedDate).getTime()));
+    };
+    window.addEventListener('posts:changed', onPostsChanged as EventListener);
+    return () => window.removeEventListener('posts:changed', onPostsChanged as EventListener);
+  }, []);
+
+  useEffect(() => {
+    const onProfileUpdated = () => {
+      const refreshed = authService.getProfile();
+      if (refreshed) {
+        setCurrentProfile(refreshed);
+        setCurrentUser(refreshed.name);
+        setNewName(refreshed.name);
+      }
+    };
+    window.addEventListener('auth:profileUpdated', onProfileUpdated as EventListener);
+    return () => window.removeEventListener('auth:profileUpdated', onProfileUpdated as EventListener);
+  }, []);
+
+  useEffect(() => {
+    if (route === 'profile') {
+      const refreshed = authService.getProfile();
+      if (refreshed) {
+        setCurrentProfile(refreshed);
+        setCurrentUser(refreshed.name);
+        setNewName(refreshed.name);
+      }
+    }
+  }, [route]);
+
   const handleCreatePost = (postData: any) => {
-    const newPost = storageService.createPost(postData);
-    setPosts(prev => [newPost, ...prev]);
+    storageService.createPost(postData);
+    // posts:changed listener will refresh list
   };
 
   const handleAuthSuccess = (profile: UserAuthProfile) => {
@@ -169,6 +202,7 @@ const App: React.FC = () => {
           onClose={() => setIsModalOpen(false)}
           onSubmit={handleCreatePost}
           currentUser={currentUser}
+          currentUserId={currentProfile?.id}
         />
         <AuthModal 
           isOpen={isAuthOpen}

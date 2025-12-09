@@ -119,10 +119,40 @@ export default defineConfig(({ mode }) => {
                 const buffer = Buffer.from(contentBase64, 'base64');
                 fs.writeFileSync(filePath, buffer);
                 const relativePath = path.relative(path.resolve(__dirname), filePath);
-                res.end(JSON.stringify({ path: relativePath }));
+                const url = '/uploads/' + [userId, filename].join('/');
+                res.end(JSON.stringify({ path: relativePath, url }));
               } catch (e) {
                 res.statusCode = 500; res.end(JSON.stringify({ error: 'upload_failed' }));
               }
+            });
+
+            server.middlewares.use('/uploads', async (req, res, next) => {
+              if (req.method !== 'GET') return next();
+              const u = (req.url || '/').split('?')[0];
+              const parts = u.split('/').filter(Boolean);
+              // Mounted at /uploads, so req.url is '/:userId/:filename'
+              if (parts.length >= 1) {
+                const userId = parts[0];
+                const filename = parts.slice(1).join('/') || '';
+                const filePath = path.resolve(__dirname, 'backend', 'uploads', userId, filename);
+                try {
+                  if (!fs.existsSync(filePath)) { res.statusCode = 404; res.end('Not found'); return; }
+                  const stream = fs.createReadStream(filePath);
+                  const lower = filename.toLowerCase();
+                  const type = lower.endsWith('.png') ? 'image/png'
+                    : lower.endsWith('.jpg') || lower.endsWith('.jpeg') ? 'image/jpeg'
+                    : lower.endsWith('.webp') ? 'image/webp'
+                    : lower.endsWith('.gif') ? 'image/gif'
+                    : 'application/octet-stream';
+                  res.setHeader('Content-Type', type);
+                  res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+                  stream.pipe(res);
+                } catch (e) {
+                  res.statusCode = 500; res.end('Server error');
+                }
+                return;
+              }
+              return next();
             });
           }
         }

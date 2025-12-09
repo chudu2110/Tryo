@@ -1,15 +1,17 @@
 import React, { useState, useRef } from 'react';
 import { ProjectField, ProjectStage } from '../types';
 import { enhanceDescription } from '../services/geminiService';
+import * as authService from '../services/authService';
 
 interface CreatePostModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSubmit: (data: any) => void;
   currentUser: string;
+  currentUserId?: string | undefined;
 }
 
-const CreatePostModal: React.FC<CreatePostModalProps> = ({ isOpen, onClose, onSubmit, currentUser }) => {
+const CreatePostModal: React.FC<CreatePostModalProps> = ({ isOpen, onClose, onSubmit, currentUser, currentUserId }) => {
   const [loading, setLoading] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   const [projectName, setProjectName] = useState('');
@@ -46,31 +48,37 @@ const CreatePostModal: React.FC<CreatePostModalProps> = ({ isOpen, onClose, onSu
     setAiLoading(false);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
-    setTimeout(() => {
-      const postData = {
-        founderName: currentUser,
-        projectName,
-        field,
-        stage,
-        compensation,
-        deadline,
-        description,
-        roles: rolesInput.split(',').map(r => r.trim()).filter(r => r.length > 0),
-        imageUrl: imagePreview || `https://picsum.photos/800/600?random=${Math.floor(Math.random() * 1000)}`,
-      };
-      onSubmit(postData);
-      setLoading(false);
-      onClose();
-      setProjectName('');
-      setDescription('');
-      setCompensation('');
-      setRolesInput('');
-      setImagePreview(null);
-    }, 800);
+    let imageUrl: string | null = imagePreview;
+    try {
+      if (imageFile && currentUserId) {
+        const uploaded = await authService.uploadFile(currentUserId, imageFile);
+        imageUrl = uploaded || imagePreview;
+      }
+    } catch {}
+
+    const postData = {
+      founderName: currentUser,
+      projectName,
+      field,
+      stage,
+      compensation,
+      deadline,
+      description,
+      roles: rolesInput.split(',').map(r => r.trim()).filter(r => r.length > 0),
+      imageUrl: imageUrl || `https://picsum.photos/800/600?random=${Math.floor(Math.random() * 1000)}`,
+    };
+    onSubmit(postData);
+    setLoading(false);
+    onClose();
+    setProjectName('');
+    setDescription('');
+    setCompensation('');
+    setRolesInput('');
+    setImagePreview(null);
   };
 
   return (
@@ -118,25 +126,22 @@ const CreatePostModal: React.FC<CreatePostModalProps> = ({ isOpen, onClose, onSu
 
             <div className="space-y-2">
               <label className="text-xs font-semibold text-neutral-400 uppercase">Project Cover</label>
-              <div 
-                onClick={() => fileInputRef.current?.click()}
-                className="w-full h-32 border-2 border-dashed border-white/10 rounded-xl flex items-center justify-center cursor-pointer hover:border-lime-accent/50 transition-colors bg-black/20 overflow-hidden relative"
-              >
+              <div className="flex items-center gap-3">
+                <input 
+                  type="file"
+                  onChange={handleImageChange}
+                  accept="image/*"
+                  className="block text-neutral-300"
+                />
+              </div>
+              <div className="w-full h-32 border border-white/10 rounded-xl overflow-hidden bg-black/20">
                 {imagePreview ? (
                   <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
                 ) : (
-                  <div className="text-center p-4">
-                    <p className="text-sm text-neutral-400">Click to upload cover image</p>
-                    <p className="text-xs text-neutral-600 mt-1">or leave empty for random gradient</p>
+                  <div className="w-full h-full flex items-center justify-center">
+                    <p className="text-sm text-neutral-500">No image selected</p>
                   </div>
                 )}
-                <input 
-                  type="file" 
-                  ref={fileInputRef}
-                  onChange={handleImageChange}
-                  accept="image/*"
-                  className="hidden"
-                />
               </div>
             </div>
 

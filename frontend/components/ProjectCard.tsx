@@ -10,13 +10,28 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ post }) => {
     (new Date(post.deadline).getTime() - new Date().getTime()) / (1000 * 3600 * 24)
   );
 
+  const normalizeSrc = (src?: string) => {
+    if (!src) return src;
+    if (src.startsWith('backend/uploads') || src.startsWith('backend\\uploads')) {
+      const parts = src.replace(/\\/g, '/').split('/');
+      const idx = parts.indexOf('uploads');
+      if (idx >= 0) {
+        return '/uploads/' + parts.slice(idx + 1).join('/');
+      }
+    }
+    return src;
+  };
+
+  const imgSrc = normalizeSrc(post.imageUrl);
+
   return (
     <div className="group relative w-full bg-dark-800 rounded-3xl overflow-hidden border border-white/5 hover:border-lime-accent/50 transition-all duration-300 hover:-translate-y-1 shadow-lg hover:shadow-lime-accent/10">
       <div className="h-48 w-full overflow-hidden relative">
         <img 
-          src={post.imageUrl} 
+          src={imgSrc || `https://picsum.photos/800/600?random=${Math.floor(Math.random() * 1000)}`}
           alt={post.projectName} 
           className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+          onError={(e) => { (e.currentTarget as HTMLImageElement).src = `https://picsum.photos/800/600?random=${Math.floor(Math.random() * 1000)}`; }}
         />
         <div className="absolute top-4 right-4 bg-black/60 backdrop-blur-md px-3 py-1 rounded-full border border-white/10">
           <span className="text-xs font-bold text-white uppercase tracking-wider">{post.field}</span>

@@ -50,7 +50,47 @@ export const createPost = (post: Omit<ProjectPost, 'id' | 'postedDate'>): Projec
   };
   const updatedPosts = [newPost, ...posts];
   localStorage.setItem(STORAGE_KEY_POSTS, JSON.stringify(updatedPosts));
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('posts:changed'));
+  }
   return newPost;
+};
+
+export const updatePost = (updated: ProjectPost): ProjectPost => {
+  const posts = getPosts();
+  const idx = posts.findIndex(p => p.id === updated.id);
+  if (idx >= 0) {
+    posts[idx] = { ...posts[idx], ...updated };
+    localStorage.setItem(STORAGE_KEY_POSTS, JSON.stringify(posts));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('posts:changed'));
+    }
+    return posts[idx];
+  }
+  return createPost({
+    founderName: updated.founderName,
+    projectName: updated.projectName,
+    field: updated.field,
+    stage: updated.stage,
+    compensation: updated.compensation,
+    deadline: updated.deadline,
+    description: updated.description,
+    imageUrl: updated.imageUrl,
+    roles: updated.roles,
+  });
+};
+
+export const deletePost = (id: string): void => {
+  const posts = getPosts();
+  const next = posts.filter(p => p.id !== id);
+  localStorage.setItem(STORAGE_KEY_POSTS, JSON.stringify(next));
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('posts:changed'));
+  }
+};
+
+export const getPostsByFounder = (name: string): ProjectPost[] => {
+  return getPosts().filter(p => p.founderName === name);
 };
 
 export const getUser = (): string => {

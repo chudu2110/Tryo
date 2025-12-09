@@ -8,6 +8,18 @@
     "links": [],
     "contactEmail": "dudzquadu@gmail.com",
     "providerId": "dudzquadu@gmail.com",
-    "cvFilePath": "backend\\uploads\\5b8b6bce-3710-4380-be52-49b1097ef443\\MY CV.pdf"
+    "cvFilePath": "backend\\uploads\\5b8b6bce-3710-4380-be52-49b1097ef443\\MY CV.pdf",
+    "portfolioFilePath": "backend\\uploads\\5b8b6bce-3710-4380-be52-49b1097ef443\\573077517_1607728450636537_8692343084556184359_n.jpg"
+  },
+  {
+    "id": "a5800cb4-080c-47fd-8c55-3e65b8a169e5",
+    "name": "Threaf",
+    "provider": "facebook",
+    "dateOfBirth": "2025-12-09",
+    "bio": "Tester of this Website.",
+    "links": [],
+    "contactFacebookUrl": "https://www.facebook.com/chu.du.186908",
+    "cvFilePath": "/uploads/a5800cb4-080c-47fd-8c55-3e65b8a169e5/homework.pdf?v=1765255826103",
+    "providerId": "https://www.facebook.com/chu.du.186908"
   }
 ]

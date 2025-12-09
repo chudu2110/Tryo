@@ -22,8 +22,16 @@ export const saveProfile = async (profile: UserAuthProfile): Promise<UserAuthPro
   const r = await fetch('/api/users/upsert', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ profile: payload }) });
   if (!r.ok) throw new Error('upsert_failed');
   const saved = await r.json();
-  localStorage.setItem(STORAGE_KEY_AUTH, JSON.stringify(saved));
-  return saved as UserAuthProfile;
+  let finalProfile = saved as UserAuthProfile;
+  try {
+    const refreshed = await findProfile(payload.provider, payload.providerId);
+    if (refreshed) finalProfile = refreshed;
+  } catch {}
+  localStorage.setItem(STORAGE_KEY_AUTH, JSON.stringify(finalProfile));
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('auth:profileUpdated'));
+  }
+  return finalProfile;
 };
 
 export const clearProfile = (): void => {
@@ -38,12 +46,24 @@ export const findProfile = async (provider: 'google' | 'facebook', identifier: s
 };
 
 export const uploadFile = async (userId: string, file: File): Promise<string> => {
-  const arrayBuffer = await file.arrayBuffer();
-  const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+  const base64 = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      const encoded = result.split(',')[1] || '';
+      resolve(encoded);
+    };
+    reader.onerror = () => reject(new Error('file_read_error'));
+    reader.readAsDataURL(file);
+  });
   const r = await fetch('/api/upload', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId, filename: file.name, contentBase64: base64 }) });
   if (!r.ok) throw new Error('upload_failed');
   const j = await r.json();
-  return j?.path as string;
+  const raw = (j?.url || j?.path) as string;
+  if (!raw) return raw;
+  const hasQuery = raw.includes('?');
+  const sep = hasQuery ? '&' : '?';
+  return `${raw}${sep}v=${Date.now()}`;
 };
 
 export const deleteAccount = async (provider: 'google'|'facebook', identifier: string): Promise<void> => {
